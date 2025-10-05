@@ -1,0 +1,38 @@
+# ============================================================================
+# SignAccessRequest Plugin Configuration
+# ============================================================================
+# This plugin allows players to create signs that trigger ConductorOne
+# access requests when right-clicked.
+#
+# Setup Instructions:
+# 1. Get your ConductorOne credentials from your C1 admin panel
+# 2. Replace the placeholder values below with your actual credentials
+# 3. Use /c1reload to reload the config without restarting the server
+# 4. Use /c1debug on to enable debug logging if you have issues
+# ============================================================================
+
+conductorone:
+  # The base URL for your ConductorOne instance
+  # Example: https://your-company.conductor.one
+  # DO NOT include a trailing slash
+  base-url: "https://your-tenant.conductor.one"
+
+  # OAuth2 Client Credentials (get these from your C1 admin panel)
+  # These are used to authenticate API requests
+  client-id: "your-client-id-here"
+  client-secret: "your-client-secret-here"
+
+  # API endpoint paths (usually don't need to change these)
+  # Token endpoint for OAuth2 authentication
+  token-endpoint: "auth/v1/token"
+
+  # Access request endpoint for creating new requests
+  access-request-endpoint: "api/v1/access-requests"
+
+# Debug Settings
+debug:
+  # Enable verbose logging for API requests and responses
+  # Useful for troubleshooting authentication or API issues
+  # WARNING: This logs sensitive information (tokens are masked)
+  # Toggle with: /c1debug on|off
+  enabled: false
