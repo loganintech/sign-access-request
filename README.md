@@ -4,7 +4,10 @@ A Minecraft plugin that allows players to create signs that trigger ConductorOne
 
 ## Features
 
-- Create signs with `[c1-req]` on line 1 to request access to ConductorOne entitlements
+- Create signs with `[c1-req]` on line 1 to request **grant** access to ConductorOne entitlements
+- Create signs with `[c1-drop]` on line 1 to request **revoke** access to ConductorOne entitlements
+- Automatic detection of existing open tasks to prevent duplicate requests
+- Clickable links to view access request tasks in ConductorOne
 - OAuth2 client credentials authentication with automatic token refresh
 - Permission-based sign creation and destruction
 - All players can use signs (right-click) by default
@@ -33,7 +36,8 @@ conductorone:
 
   # API endpoints (usually don't need to change)
   token-endpoint: "auth/v1/token"
-  access-request-endpoint: "api/v1/access-requests"
+  grant-task-endpoint: "api/v1/task/grant"
+  revoke-task-endpoint: "api/v1/task/revoke"
 
 # Debug Settings
 debug:
@@ -45,10 +49,17 @@ debug:
 
 ### Creating a Sign
 
+#### Grant Access Sign
 1. Place a sign
 2. On line 1, type: `[c1-req]`
-3. On line 2, type the entitlement slug (e.g., `prod-admin-access`)
-4. Lines 3 and 4 can contain any text you want
+3. On line 2, type the entitlement alias (e.g., `prod-admin-access`)
+4. Lines 3 and 4 can contain any text you want (e.g., description)
+
+#### Revoke Access Sign
+1. Place a sign
+2. On line 1, type: `[c1-drop]`
+3. On line 2, type the entitlement alias (e.g., `prod-admin-access`)
+4. Lines 3 and 4 can contain any text you want (e.g., description)
 
 If valid:
 - Line 1 will turn **blue**
@@ -56,13 +67,19 @@ If valid:
 
 If invalid:
 - Line 1 will turn **red**
-- Check that line 2 has an entitlement slug
+- Check that line 2 has an entitlement alias
 
 ### Using a Sign
 
-Right-click any valid C1 request sign to submit an access request for that entitlement. You'll receive:
+Right-click any valid C1 sign to submit a grant or revoke request for that entitlement.
+
+**When successful, you'll receive:**
 - A confirmation message
-- A clickable link to view your access request task in ConductorOne
+- A clickable link to view your task in ConductorOne
+
+**If you have existing open tasks:**
+- The plugin will detect them and show you clickable links to the existing tasks
+- No duplicate task will be created
 
 ### Destroying a Sign
 
