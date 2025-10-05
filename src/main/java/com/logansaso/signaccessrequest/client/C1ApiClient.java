@@ -15,30 +15,159 @@ import java.util.concurrent.CompletableFuture;
 
 public class C1ApiClient {
     private final String baseUrl;
-    private final String accessRequestEndpoint;
+    private final String grantTaskEndpoint;
     private final TokenManager tokenManager;
     private final SignAccessRequestPlugin plugin;
     private final Gson gson;
 
-    public C1ApiClient(String baseUrl, String accessRequestEndpoint, TokenManager tokenManager, SignAccessRequestPlugin plugin) {
+    public C1ApiClient(String baseUrl, String grantTaskEndpoint, TokenManager tokenManager, SignAccessRequestPlugin plugin) {
         this.baseUrl = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
-        this.accessRequestEndpoint = accessRequestEndpoint;
+        this.grantTaskEndpoint = grantTaskEndpoint;
         this.tokenManager = tokenManager;
         this.plugin = plugin;
         this.gson = new Gson();
     }
 
     /**
-     * Creates an access request for the given entitlement slug
+     * Creates a grant task for the given entitlement alias
      *
      * @param player The player requesting access
-     * @param entitlementSlug The slug of the entitlement to request
+     * @param entitlementAlias The alias of the entitlement to request (e.g., "prod-admin-access")
      * @return A CompletableFuture that completes with an AccessRequestResult
      */
-    public CompletableFuture<AccessRequestResult> createAccessRequest(Player player, String entitlementSlug) {
-        return tokenManager.getAccessToken().thenApplyAsync(token -> {
+    public CompletableFuture<AccessRequestResult> createGrantTask(Player player, String entitlementAlias) {
+        return tokenManager.getAccessToken().thenComposeAsync(token -> {
             try {
-                String requestUrl = baseUrl + "/" + accessRequestEndpoint;
+                // Step 1: Search for entitlement by alias
+                JsonObject entitlement = searchEntitlementByAlias(token, entitlementAlias);
+                if (entitlement == null) {
+                    return CompletableFuture.completedFuture(
+                        new AccessRequestResult(false, "Entitlement '" + entitlementAlias + "' not found", null));
+                }
+
+                String appId = entitlement.get("appId").getAsString();
+                String entitlementId = entitlement.get("id").getAsString();
+
+                // Step 2: Search for user by minecraft username
+                String identityUserId = searchUserByUsername(token, player.getName());
+                if (identityUserId == null) {
+                    return CompletableFuture.completedFuture(
+                        new AccessRequestResult(false, "User '" + player.getName() + "' not found in ConductorOne", null));
+                }
+
+                // Step 3: Create grant task
+                return createGrantTaskWithIds(token, player, appId, entitlementId, identityUserId, entitlementAlias);
+
+            } catch (Exception e) {
+                plugin.getLogger().severe("Error in grant task workflow: " + e.getMessage());
+                if (plugin.isDebugMode()) {
+                    e.printStackTrace();
+                }
+                return CompletableFuture.completedFuture(
+                    new AccessRequestResult(false, "Internal error: " + e.getMessage(), null));
+            }
+        });
+    }
+
+    /**
+     * Searches for an entitlement by alias
+     */
+    private JsonObject searchEntitlementByAlias(String token, String alias) throws IOException {
+        String searchUrl = baseUrl + "/api/v1/search/entitlements";
+        URL url = new URL(searchUrl);
+        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+
+        conn.setRequestMethod("POST");
+        conn.setRequestProperty("Content-Type", "application/json");
+        conn.setRequestProperty("Authorization", "Bearer " + token);
+        conn.setDoOutput(true);
+
+        JsonObject requestBody = new JsonObject();
+        requestBody.addProperty("alias", alias);
+        requestBody.addProperty("pageSize", 1);
+
+        String requestBodyJson = gson.toJson(requestBody);
+
+        if (plugin.isDebugMode()) {
+            plugin.getLogger().info("[DEBUG] Entitlement Search:");
+            plugin.getLogger().info("[DEBUG]   Alias: " + alias);
+        }
+
+        try (OutputStream os = conn.getOutputStream()) {
+            byte[] input = requestBodyJson.getBytes(StandardCharsets.UTF_8);
+            os.write(input, 0, input.length);
+        }
+
+        int responseCode = conn.getResponseCode();
+        if (responseCode == 200) {
+            String response = new String(conn.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+            JsonObject jsonResponse = gson.fromJson(response, JsonObject.class);
+
+            if (jsonResponse.has("list") && jsonResponse.getAsJsonArray("list").size() > 0) {
+                JsonObject entitlementView = jsonResponse.getAsJsonArray("list").get(0).getAsJsonObject();
+                if (entitlementView.has("appEntitlement")) {
+                    return entitlementView.getAsJsonObject("appEntitlement");
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Searches for a user by minecraft username
+     */
+    private String searchUserByUsername(String token, String username) throws IOException {
+        String searchUrl = baseUrl + "/api/v1/search/users";
+        URL url = new URL(searchUrl);
+        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+
+        conn.setRequestMethod("POST");
+        conn.setRequestProperty("Content-Type", "application/json");
+        conn.setRequestProperty("Authorization", "Bearer " + token);
+        conn.setDoOutput(true);
+
+        JsonObject requestBody = new JsonObject();
+        requestBody.addProperty("query", username);
+        requestBody.addProperty("pageSize", 1);
+
+        String requestBodyJson = gson.toJson(requestBody);
+
+        if (plugin.isDebugMode()) {
+            plugin.getLogger().info("[DEBUG] User Search:");
+            plugin.getLogger().info("[DEBUG]   Query: " + username);
+        }
+
+        try (OutputStream os = conn.getOutputStream()) {
+            byte[] input = requestBodyJson.getBytes(StandardCharsets.UTF_8);
+            os.write(input, 0, input.length);
+        }
+
+        int responseCode = conn.getResponseCode();
+        if (responseCode == 200) {
+            String response = new String(conn.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+            JsonObject jsonResponse = gson.fromJson(response, JsonObject.class);
+
+            if (jsonResponse.has("list") && jsonResponse.getAsJsonArray("list").size() > 0) {
+                JsonObject user = jsonResponse.getAsJsonArray("list").get(0).getAsJsonObject();
+                if (user.has("id")) {
+                    return user.get("id").getAsString();
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Creates a grant task with the resolved IDs
+     */
+    private CompletableFuture<AccessRequestResult> createGrantTaskWithIds(String token, Player player,
+                                                                            String appId, String entitlementId,
+                                                                            String identityUserId, String entitlementAlias) {
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                String requestUrl = baseUrl + "/" + grantTaskEndpoint;
                 URL url = new URL(requestUrl);
                 HttpURLConnection conn = (HttpURLConnection) url.openConnection();
 
@@ -47,22 +176,26 @@ public class C1ApiClient {
                 conn.setRequestProperty("Authorization", "Bearer " + token);
                 conn.setDoOutput(true);
 
-                // Build request body
+                // Build grant task request body according to API spec
                 JsonObject requestBody = new JsonObject();
-                requestBody.addProperty("entitlementSlug", entitlementSlug);
-                requestBody.addProperty("userId", player.getUniqueId().toString());
-                requestBody.addProperty("userName", player.getName());
+                requestBody.addProperty("appId", appId);
+                requestBody.addProperty("appEntitlementId", entitlementId);
+                requestBody.addProperty("identityUserId", identityUserId);
 
-                // Add justification if needed
-                JsonObject metadata = new JsonObject();
-                metadata.addProperty("source", "minecraft-sign");
-                metadata.addProperty("playerName", player.getName());
-                requestBody.add("metadata", metadata);
+                // Add description with player info
+                requestBody.addProperty("description", "Access request from Minecraft player: " + player.getName());
+
+                // Add metadata in requestData field
+                JsonObject requestData = new JsonObject();
+                requestData.addProperty("source", "minecraft-sign");
+                requestData.addProperty("playerName", player.getName());
+                requestData.addProperty("playerUUID", player.getUniqueId().toString());
+                requestBody.add("requestData", requestData);
 
                 String requestBodyJson = gson.toJson(requestBody);
 
                 if (plugin.isDebugMode()) {
-                    plugin.getLogger().info("[DEBUG] Access Request:");
+                    plugin.getLogger().info("[DEBUG] Grant Task Request:");
                     plugin.getLogger().info("[DEBUG]   URL: " + requestUrl);
                     plugin.getLogger().info("[DEBUG]   Method: POST");
                     plugin.getLogger().info("[DEBUG]   Body: " + requestBodyJson);
@@ -84,11 +217,11 @@ public class C1ApiClient {
                     String response = new String(conn.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
 
                     if (plugin.isDebugMode()) {
-                        plugin.getLogger().info("[DEBUG] Access Request Response: " + response);
+                        plugin.getLogger().info("[DEBUG] Grant Task Response: " + response);
                     }
 
-                    plugin.getLogger().info("Successfully created access request for " + player.getName() +
-                                          " for entitlement: " + entitlementSlug);
+                    plugin.getLogger().info("Successfully created grant task for " + player.getName() +
+                                          " for entitlement: " + entitlementAlias);
 
                     // Parse response to get task ID and construct URL
                     String taskUrl = extractTaskUrl(response);
@@ -126,15 +259,25 @@ public class C1ApiClient {
     }
 
     /**
-     * Extracts the task URL from the API response
+     * Extracts the task URL from the grant task API response
      */
     private String extractTaskUrl(String response) {
         try {
             JsonObject jsonResponse = gson.fromJson(response, JsonObject.class);
 
-            // Try to extract task ID from different possible response formats
+            // Grant task response format: { "taskView": { "task": { "id": "..." } } }
             String taskId = null;
-            if (jsonResponse.has("id")) {
+            if (jsonResponse.has("taskView")) {
+                JsonObject taskView = jsonResponse.getAsJsonObject("taskView");
+                if (taskView.has("task")) {
+                    JsonObject task = taskView.getAsJsonObject("task");
+                    if (task.has("id")) {
+                        taskId = task.get("id").getAsString();
+                    }
+                }
+            }
+            // Fallback: try other possible formats
+            else if (jsonResponse.has("id")) {
                 taskId = jsonResponse.get("id").getAsString();
             } else if (jsonResponse.has("taskId")) {
                 taskId = jsonResponse.get("taskId").getAsString();

@@ -61,12 +61,12 @@ public class SignInteractListener implements Listener {
             return;
         }
 
-        // Get the entitlement slug from line 2
+        // Get the entitlement alias from line 2
         Component line2 = sign.line(1);
-        String entitlementSlug = SignValidator.getPlainText(line2);
+        String entitlementAlias = SignValidator.getPlainText(line2);
 
-        if (entitlementSlug.isEmpty()) {
-            player.sendMessage(Component.text("This sign is missing an entitlement slug on line 2!")
+        if (entitlementAlias.isEmpty()) {
+            player.sendMessage(Component.text("This sign is missing an entitlement alias on line 2!")
                 .color(NamedTextColor.RED));
             event.setCancelled(true);
             return;
@@ -75,13 +75,13 @@ public class SignInteractListener implements Listener {
         // Cancel the event to prevent any default behavior
         event.setCancelled(true);
 
-        // Send access request with user feedback
+        // Send grant task request with user feedback
         player.sendMessage(Component.text("⏳ Submitting access request for: ")
             .color(NamedTextColor.YELLOW)
-            .append(Component.text(entitlementSlug).color(NamedTextColor.WHITE))
+            .append(Component.text(entitlementAlias).color(NamedTextColor.WHITE))
             .append(Component.text("...").color(NamedTextColor.YELLOW)));
 
-        apiClient.createAccessRequest(player, entitlementSlug).thenAccept(result -> {
+        apiClient.createGrantTask(player, entitlementAlias).thenAccept(result -> {
             // Schedule back to main thread for sending message
             plugin.getServer().getScheduler().runTask(plugin, () -> {
                 if (result.isSuccess()) {

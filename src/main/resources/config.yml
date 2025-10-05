@@ -26,8 +26,8 @@ conductorone:
   # Token endpoint for OAuth2 authentication
   token-endpoint: "auth/v1/token"
 
-  # Access request endpoint for creating new requests
-  access-request-endpoint: "api/v1/access-requests"
+  # Grant task endpoint for creating grant requests
+  grant-task-endpoint: "api/v1/task/grant"
 
 # Debug Settings
 debug:

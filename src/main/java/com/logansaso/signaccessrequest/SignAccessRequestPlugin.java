@@ -62,7 +62,7 @@ public class SignAccessRequestPlugin extends JavaPlugin {
         String clientId = getConfig().getString("conductorone.client-id");
         String clientSecret = getConfig().getString("conductorone.client-secret");
         String tokenEndpoint = getConfig().getString("conductorone.token-endpoint");
-        String accessRequestEndpoint = getConfig().getString("conductorone.access-request-endpoint");
+        String grantTaskEndpoint = getConfig().getString("conductorone.grant-task-endpoint");
         debugMode = getConfig().getBoolean("debug.enabled", false);
 
         // Debug log the loaded values (mask sensitive data)
@@ -71,7 +71,7 @@ public class SignAccessRequestPlugin extends JavaPlugin {
         getLogger().info("  client-id length: " + (clientId != null ? clientId.length() : "null") + " characters");
         getLogger().info("  client-secret length: " + (clientSecret != null ? clientSecret.length() : "null") + " characters");
         getLogger().info("  token-endpoint: " + tokenEndpoint);
-        getLogger().info("  access-request-endpoint: " + accessRequestEndpoint);
+        getLogger().info("  grant-task-endpoint: " + grantTaskEndpoint);
 
         // Validate configuration
         if (baseUrl == null || baseUrl.isEmpty() || baseUrl.equals("https://your-tenant.conductor.one")) {
@@ -96,7 +96,7 @@ public class SignAccessRequestPlugin extends JavaPlugin {
         // Initialize API client
         apiClient = new C1ApiClient(
             baseUrl,
-            accessRequestEndpoint,
+            grantTaskEndpoint,
             tokenManager,
             this
         );
