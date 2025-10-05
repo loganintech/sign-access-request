@@ -1,0 +1,30 @@
+name: SignAccessRequest
+version: '${version}'
+main: com.logansaso.signaccessrequest.SignAccessRequestPlugin
+api-version: '1.21'
+author: ConductorOne
+description: ConductorOne sign-based access request plugin
+
+commands:
+  c1reload:
+    description: Reloads the SignAccessRequest plugin configuration
+    usage: /c1reload
+    permission: signaccessrequest.admin
+  c1debug:
+    description: Toggles debug mode for C1 API requests
+    usage: /c1debug [on|off]
+    permission: signaccessrequest.admin
+
+permissions:
+  signaccessrequest.create:
+    description: Allows creating C1 access request signs
+    default: op
+  signaccessrequest.destroy:
+    description: Allows destroying C1 access request signs
+    default: op
+  signaccessrequest.use:
+    description: Allows using C1 access request signs
+    default: true
+  signaccessrequest.admin:
+    description: Allows using admin commands
+    default: op
