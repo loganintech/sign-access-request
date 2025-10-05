@@ -3,13 +3,8 @@ package com.logansaso.signaccessrequest.auth;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.logansaso.signaccessrequest.SignAccessRequestPlugin;
-import com.nimbusds.jose.JOSEException;
-import com.nimbusds.jose.JWSAlgorithm;
-import com.nimbusds.jose.JWSHeader;
-import com.nimbusds.jose.crypto.Ed25519Signer;
-import com.nimbusds.jose.jwk.OctetKeyPair;
-import com.nimbusds.jwt.JWTClaimsSet;
-import com.nimbusds.jwt.SignedJWT;
+import org.bouncycastle.crypto.params.Ed25519PrivateKeyParameters;
+import org.bouncycastle.crypto.signers.Ed25519Signer;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -17,7 +12,6 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
-import java.util.Date;
 import java.util.concurrent.CompletableFuture;
 
 public class TokenManager {
@@ -67,79 +61,91 @@ public class TokenManager {
 
     /**
      * Parses ConductorOne client secret in the format: prefix:data:v1:base64url_encoded_jwk
+     * Returns the Ed25519 private key bytes
      */
-    private OctetKeyPair parseClientSecret() throws JOSEException {
+    private byte[] parseClientSecret() throws Exception {
         String[] parts = clientSecret.split(":", 4);
 
         if (parts.length != 4) {
-            throw new JOSEException("Invalid client secret format. Expected format: prefix:data:v1:base64url_jwk");
+            throw new IllegalArgumentException("Invalid client secret format. Expected format: prefix:data:v1:base64url_jwk");
         }
 
         // Verify the version identifier (third part should be "v1")
         if (!"v1".equals(parts[2])) {
-            throw new JOSEException("Invalid client secret version. Expected 'v1', got: " + parts[2]);
+            throw new IllegalArgumentException("Invalid client secret version. Expected 'v1', got: " + parts[2]);
         }
 
         // Decode the base64-URL encoded JWK (fourth part)
-        byte[] jwkBytes;
-        try {
-            jwkBytes = Base64.getUrlDecoder().decode(parts[3]);
-        } catch (IllegalArgumentException e) {
-            throw new JOSEException("Failed to decode JWK from client secret: " + e.getMessage());
-        }
+        byte[] jwkBytes = Base64.getUrlDecoder().decode(parts[3]);
 
-        // Parse as JWK
+        // Parse JWK JSON to extract the private key "d" field
         String jwkJson = new String(jwkBytes, StandardCharsets.UTF_8);
-        OctetKeyPair jwk;
-        try {
-            jwk = OctetKeyPair.parse(jwkJson);
-        } catch (Exception e) {
-            throw new JOSEException("Failed to parse JWK from client secret: " + e.getMessage());
+        JsonObject jwk = gson.fromJson(jwkJson, JsonObject.class);
+
+        if (!jwk.has("d")) {
+            throw new IllegalArgumentException("JWK does not contain private key 'd' field");
         }
 
-        // Validate it's a private key
-        if (!jwk.isPrivate()) {
-            throw new JOSEException("Client secret JWK must be a private key");
-        }
-
-        return jwk;
+        // Decode the base64url-encoded private key
+        String dValue = jwk.get("d").getAsString();
+        return Base64.getUrlDecoder().decode(dValue);
     }
 
     /**
-     * Creates a signed JWT for client assertion using EdDSA
+     * Creates a signed JWT for client assertion using EdDSA (Ed25519)
      */
-    private String createClientAssertion() throws JOSEException {
+    private String createClientAssertion() throws Exception {
         // Extract audience (hostname without port)
         String audience = baseUrl.replaceFirst("https?://", "").split(":")[0];
 
-        // Set up JWT claims
-        Date now = new Date();
-        Date expiry = new Date(now.getTime() + 2 * 60 * 1000); // 2 minutes from now
-        Date notBefore = new Date(now.getTime() - 2 * 60 * 1000); // 2 minutes ago
+        // Current time in seconds
+        long now = System.currentTimeMillis() / 1000;
+        long expiry = now + 120; // 2 minutes from now
+        long notBefore = now - 120; // 2 minutes ago
 
-        JWTClaimsSet claimsSet = new JWTClaimsSet.Builder()
-            .issuer(clientId)
-            .subject(clientId)
-            .audience(audience)
-            .expirationTime(expiry)
-            .issueTime(now)
-            .notBeforeTime(notBefore)
-            .build();
+        // Build JWT header
+        JsonObject header = new JsonObject();
+        header.addProperty("alg", "EdDSA");
+        header.addProperty("typ", "JWT");
 
-        // Parse the ConductorOne client secret to get the Ed25519 private key
-        OctetKeyPair jwk = parseClientSecret();
+        // Build JWT claims
+        JsonObject claims = new JsonObject();
+        claims.addProperty("iss", clientId);
+        claims.addProperty("sub", clientId);
+        claims.addProperty("aud", audience);
+        claims.addProperty("exp", expiry);
+        claims.addProperty("iat", now);
+        claims.addProperty("nbf", notBefore);
 
-        // Create signer
-        Ed25519Signer signer = new Ed25519Signer(jwk);
+        // Encode header and claims
+        String headerEncoded = base64UrlEncode(header.toString().getBytes(StandardCharsets.UTF_8));
+        String claimsEncoded = base64UrlEncode(claims.toString().getBytes(StandardCharsets.UTF_8));
 
-        // Create and sign JWT
-        SignedJWT signedJWT = new SignedJWT(
-            new JWSHeader.Builder(JWSAlgorithm.EdDSA).build(),
-            claimsSet
-        );
-        signedJWT.sign(signer);
+        // Create signing input
+        String signingInput = headerEncoded + "." + claimsEncoded;
 
-        return signedJWT.serialize();
+        // Parse private key and sign
+        byte[] privateKeyBytes = parseClientSecret();
+        Ed25519PrivateKeyParameters privateKey = new Ed25519PrivateKeyParameters(privateKeyBytes, 0);
+
+        Ed25519Signer signer = new Ed25519Signer();
+        signer.init(true, privateKey);
+        byte[] message = signingInput.getBytes(StandardCharsets.UTF_8);
+        signer.update(message, 0, message.length);
+        byte[] signature = signer.generateSignature();
+
+        // Encode signature
+        String signatureEncoded = base64UrlEncode(signature);
+
+        // Return complete JWT
+        return signingInput + "." + signatureEncoded;
+    }
+
+    /**
+     * Base64 URL-safe encoding without padding
+     */
+    private String base64UrlEncode(byte[] data) {
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(data);
     }
 
     private CompletableFuture<String> fetchNewToken() {
