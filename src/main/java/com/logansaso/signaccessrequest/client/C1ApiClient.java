@@ -264,35 +264,32 @@ public class C1ApiClient {
     }
 
     /**
-     * Extracts the task URL from the grant task API response
+     * Extracts the task URL from the grant task API response using numeric_id
      */
     private String extractTaskUrl(String response) {
         try {
             JsonObject jsonResponse = gson.fromJson(response, JsonObject.class);
 
-            // Grant task response format: { "taskView": { "task": { "id": "..." } } }
-            String taskId = null;
+            // Grant task response format: { "taskView": { "task": { "numericId": "..." } } }
+            String numericId = null;
             if (jsonResponse.has("taskView")) {
                 JsonObject taskView = jsonResponse.getAsJsonObject("taskView");
                 if (taskView.has("task")) {
                     JsonObject task = taskView.getAsJsonObject("task");
-                    if (task.has("id")) {
-                        taskId = task.get("id").getAsString();
+                    // Try numeric_id first (for user-friendly URLs)
+                    if (task.has("numericId")) {
+                        numericId = task.get("numericId").getAsString();
+                    }
+                    // Fallback to regular id
+                    else if (task.has("id")) {
+                        numericId = task.get("id").getAsString();
                     }
                 }
             }
-            // Fallback: try other possible formats
-            else if (jsonResponse.has("id")) {
-                taskId = jsonResponse.get("id").getAsString();
-            } else if (jsonResponse.has("taskId")) {
-                taskId = jsonResponse.get("taskId").getAsString();
-            } else if (jsonResponse.has("task") && jsonResponse.getAsJsonObject("task").has("id")) {
-                taskId = jsonResponse.getAsJsonObject("task").get("id").getAsString();
-            }
 
-            if (taskId != null) {
-                // Construct the task URL
-                return baseUrl + "/tasks/" + taskId;
+            if (numericId != null) {
+                // Construct the task URL with numeric ID
+                return baseUrl + "/tasks/" + numericId;
             }
         } catch (Exception e) {
             plugin.getLogger().warning("Failed to extract task URL from response: " + e.getMessage());

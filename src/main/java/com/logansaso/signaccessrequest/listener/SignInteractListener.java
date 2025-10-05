@@ -88,12 +88,15 @@ public class SignInteractListener implements Listener {
                     player.sendMessage(Component.text("✓ Access request submitted successfully!")
                         .color(NamedTextColor.GREEN));
 
-                    // Show task URL if available
+                    // Show task URL if available (clickable)
                     if (result.getTaskUrl() != null) {
                         player.sendMessage(Component.text("   View your request: ")
                             .color(NamedTextColor.GRAY)
                             .append(Component.text(result.getTaskUrl())
-                                .color(NamedTextColor.AQUA)));
+                                .color(NamedTextColor.AQUA)
+                                .clickEvent(net.kyori.adventure.text.event.ClickEvent.openUrl(result.getTaskUrl()))
+                                .hoverEvent(net.kyori.adventure.text.event.HoverEvent.showText(
+                                    Component.text("Click to open in browser").color(NamedTextColor.YELLOW)))));
                     }
                 } else {
                     player.sendMessage(Component.text("✗ Failed to submit access request")
