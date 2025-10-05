@@ -65,6 +65,14 @@ public class SignAccessRequestPlugin extends JavaPlugin {
         String accessRequestEndpoint = getConfig().getString("conductorone.access-request-endpoint");
         debugMode = getConfig().getBoolean("debug.enabled", false);
 
+        // Debug log the loaded values (mask sensitive data)
+        getLogger().info("Loading configuration:");
+        getLogger().info("  base-url: " + baseUrl);
+        getLogger().info("  client-id length: " + (clientId != null ? clientId.length() : "null") + " characters");
+        getLogger().info("  client-secret length: " + (clientSecret != null ? clientSecret.length() : "null") + " characters");
+        getLogger().info("  token-endpoint: " + tokenEndpoint);
+        getLogger().info("  access-request-endpoint: " + accessRequestEndpoint);
+
         // Validate configuration
         if (baseUrl == null || baseUrl.isEmpty() || baseUrl.equals("https://your-tenant.conductor.one")) {
             throw new IllegalArgumentException("conductorone.base-url is not configured");

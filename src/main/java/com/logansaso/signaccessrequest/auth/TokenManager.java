@@ -25,6 +25,16 @@ public class TokenManager {
 
     public TokenManager(String baseUrl, String clientId, String clientSecret, String tokenEndpoint, SignAccessRequestPlugin plugin) {
         this.baseUrl = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
+
+        // Validate client credentials
+        if (clientId == null || clientId.length() < 20) {
+            throw new IllegalArgumentException("clientId must be at least 20 characters long. Current length: " +
+                (clientId == null ? "null" : clientId.length()) + ". Please check your config.yml");
+        }
+        if (clientSecret == null || clientSecret.isEmpty()) {
+            throw new IllegalArgumentException("clientSecret cannot be empty. Please check your config.yml");
+        }
+
         this.clientId = clientId;
         this.clientSecret = clientSecret;
         this.tokenEndpoint = tokenEndpoint;
@@ -108,7 +118,7 @@ public class TokenManager {
                 accessToken = jsonResponse.get("access_token").getAsString();
                 int expiresIn = jsonResponse.get("expires_in").getAsInt();
 
-                // Set expiry with 5 minute buffer
+                // Set expiry with 5-minute buffer
                 tokenExpiresAt = System.currentTimeMillis() + ((expiresIn - 300) * 1000L);
 
                 plugin.getLogger().info("Successfully obtained ConductorOne access token (expires in " + expiresIn + "s)");
