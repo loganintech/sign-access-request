@@ -48,15 +48,15 @@ public class C1ApiClient {
                 String appId = entitlement.get("appId").getAsString();
                 String entitlementId = entitlement.get("id").getAsString();
 
-                // Step 2: Search for user by minecraft username
-                String identityUserId = searchUserByUsername(token, player.getName());
-                if (identityUserId == null) {
+                // Step 2: Search for app user in this specific app by minecraft username
+                String appUserId = searchAppUserByUsername(token, appId, player.getName());
+                if (appUserId == null) {
                     return CompletableFuture.completedFuture(
-                        new AccessRequestResult(false, "User '" + player.getName() + "' not found in ConductorOne", null));
+                        new AccessRequestResult(false, "User '" + player.getName() + "' not found in app", null));
                 }
 
                 // Step 3: Create grant task
-                return createGrantTaskWithIds(token, player, appId, entitlementId, identityUserId, entitlementAlias);
+                return createGrantTaskWithIds(token, player, appId, entitlementId, appUserId, entitlementAlias);
 
             } catch (Exception e) {
                 plugin.getLogger().severe("Error in grant task workflow: " + e.getMessage());
@@ -115,10 +115,10 @@ public class C1ApiClient {
     }
 
     /**
-     * Searches for a user by minecraft username
+     * Searches for an app user in a specific app by minecraft username
      */
-    private String searchUserByUsername(String token, String username) throws IOException {
-        String searchUrl = baseUrl + "/api/v1/search/users";
+    private String searchAppUserByUsername(String token, String appId, String username) throws IOException {
+        String searchUrl = baseUrl + "/api/v1/search/app_users";
         URL url = new URL(searchUrl);
         HttpURLConnection conn = (HttpURLConnection) url.openConnection();
 
@@ -128,13 +128,15 @@ public class C1ApiClient {
         conn.setDoOutput(true);
 
         JsonObject requestBody = new JsonObject();
+        requestBody.addProperty("appId", appId);
         requestBody.addProperty("query", username);
         requestBody.addProperty("pageSize", 1);
 
         String requestBodyJson = gson.toJson(requestBody);
 
         if (plugin.isDebugMode()) {
-            plugin.getLogger().info("[DEBUG] User Search:");
+            plugin.getLogger().info("[DEBUG] App User Search:");
+            plugin.getLogger().info("[DEBUG]   App ID: " + appId);
             plugin.getLogger().info("[DEBUG]   Query: " + username);
         }
 
@@ -149,9 +151,12 @@ public class C1ApiClient {
             JsonObject jsonResponse = gson.fromJson(response, JsonObject.class);
 
             if (jsonResponse.has("list") && jsonResponse.getAsJsonArray("list").size() > 0) {
-                JsonObject user = jsonResponse.getAsJsonArray("list").get(0).getAsJsonObject();
-                if (user.has("id")) {
-                    return user.get("id").getAsString();
+                JsonObject appUserView = jsonResponse.getAsJsonArray("list").get(0).getAsJsonObject();
+                if (appUserView.has("appUser")) {
+                    JsonObject appUser = appUserView.getAsJsonObject("appUser");
+                    if (appUser.has("id")) {
+                        return appUser.get("id").getAsString();
+                    }
                 }
             }
         }
@@ -164,7 +169,7 @@ public class C1ApiClient {
      */
     private CompletableFuture<AccessRequestResult> createGrantTaskWithIds(String token, Player player,
                                                                             String appId, String entitlementId,
-                                                                            String identityUserId, String entitlementAlias) {
+                                                                            String appUserId, String entitlementAlias) {
         return CompletableFuture.supplyAsync(() -> {
             try {
                 String requestUrl = baseUrl + "/" + grantTaskEndpoint;
@@ -180,7 +185,7 @@ public class C1ApiClient {
                 JsonObject requestBody = new JsonObject();
                 requestBody.addProperty("appId", appId);
                 requestBody.addProperty("appEntitlementId", entitlementId);
-                requestBody.addProperty("identityUserId", identityUserId);
+                requestBody.addProperty("appUserId", appUserId);
 
                 // Add description with player info
                 requestBody.addProperty("description", "Access request from Minecraft player: " + player.getName());
