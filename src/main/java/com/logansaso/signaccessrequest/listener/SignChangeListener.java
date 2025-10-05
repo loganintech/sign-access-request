@@ -36,14 +36,18 @@ public class SignChangeListener implements Listener {
             return;
         }
 
+        // Determine sign type
+        SignValidator.SignType signType = SignValidator.getSignType(line1);
+        String signPrefix = SignValidator.getPrefixForType(signType);
+
         // Validate the sign format
         Component line2 = event.line(1);
         String entitlementSlug = SignValidator.getPlainText(line2);
 
         if (entitlementSlug.isEmpty()) {
             // Invalid sign - no entitlement slug on line 2
-            event.line(0, Component.text(SignValidator.SIGN_PREFIX).color(NamedTextColor.RED));
-            player.sendMessage(Component.text("✗ Invalid sign! Line 2 must contain the entitlement slug.")
+            event.line(0, Component.text(signPrefix).color(NamedTextColor.RED));
+            player.sendMessage(Component.text("✗ Invalid sign! Line 2 must contain the entitlement alias.")
                 .color(NamedTextColor.RED));
             player.sendMessage(Component.text("   Example: prod-admin-access")
                 .color(NamedTextColor.GRAY));
@@ -51,13 +55,14 @@ public class SignChangeListener implements Listener {
         }
 
         // Valid sign - make line 1 blue, keep line 2 as-is
-        event.line(0, Component.text(SignValidator.SIGN_PREFIX).color(NamedTextColor.BLUE));
+        event.line(0, Component.text(signPrefix).color(NamedTextColor.BLUE));
 
-        player.sendMessage(Component.text("✓ C1 access request sign created successfully!")
+        String actionType = signType == SignValidator.SignType.GRANT ? "grant" : "revoke";
+        player.sendMessage(Component.text("✓ C1 " + actionType + " sign created successfully!")
             .color(NamedTextColor.GREEN));
         player.sendMessage(Component.text("   Entitlement: " + entitlementSlug)
             .color(NamedTextColor.GRAY));
 
-        plugin.getLogger().info("Player " + player.getName() + " created a C1 sign for entitlement: " + entitlementSlug);
+        plugin.getLogger().info("Player " + player.getName() + " created a C1 " + actionType + " sign for entitlement: " + entitlementSlug);
     }
 }

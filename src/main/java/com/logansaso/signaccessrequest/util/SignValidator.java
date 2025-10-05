@@ -11,7 +11,14 @@ import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
  */
 public class SignValidator {
 
-    public static final String SIGN_PREFIX = "[c1-req]";
+    public static final String GRANT_SIGN_PREFIX = "[c1-req]";
+    public static final String REVOKE_SIGN_PREFIX = "[c1-drop]";
+
+    public enum SignType {
+        GRANT,
+        REVOKE,
+        UNKNOWN
+    }
 
     /**
      * Checks if a component has blue text color
@@ -48,11 +55,38 @@ public class SignValidator {
     }
 
     /**
-     * Checks if the text contains the C1 sign prefix
+     * Checks if the text contains any C1 sign prefix
      */
     public static boolean containsSignPrefix(Component component) {
         String plainText = getPlainText(component);
-        return plainText.contains(SIGN_PREFIX);
+        return plainText.contains(GRANT_SIGN_PREFIX) || plainText.contains(REVOKE_SIGN_PREFIX);
+    }
+
+    /**
+     * Determines the sign type from the component
+     */
+    public static SignType getSignType(Component component) {
+        String plainText = getPlainText(component).toLowerCase();
+        if (plainText.contains(GRANT_SIGN_PREFIX)) {
+            return SignType.GRANT;
+        } else if (plainText.contains(REVOKE_SIGN_PREFIX)) {
+            return SignType.REVOKE;
+        }
+        return SignType.UNKNOWN;
+    }
+
+    /**
+     * Gets the appropriate prefix for a sign type
+     */
+    public static String getPrefixForType(SignType type) {
+        switch (type) {
+            case GRANT:
+                return GRANT_SIGN_PREFIX;
+            case REVOKE:
+                return REVOKE_SIGN_PREFIX;
+            default:
+                return GRANT_SIGN_PREFIX;
+        }
     }
 
     /**

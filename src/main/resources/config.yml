@@ -29,6 +29,9 @@ conductorone:
   # Grant task endpoint for creating grant requests
   grant-task-endpoint: "api/v1/task/grant"
 
+  # Revoke task endpoint for creating revoke requests
+  revoke-task-endpoint: "api/v1/task/revoke"
+
 # Debug Settings
 debug:
   # Enable verbose logging for API requests and responses

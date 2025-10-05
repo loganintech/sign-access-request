@@ -72,20 +72,30 @@ public class SignInteractListener implements Listener {
             return;
         }
 
+        // Determine sign type
+        SignValidator.SignType signType = SignValidator.getSignType(line1);
+        String actionText = signType == SignValidator.SignType.GRANT ? "grant" : "revoke";
+
         // Cancel the event to prevent any default behavior
         event.setCancelled(true);
 
-        // Send grant task request with user feedback
-        player.sendMessage(Component.text("⏳ Submitting access request for: ")
+        // Send task request with user feedback
+        player.sendMessage(Component.text("⏳ Processing " + actionText + " request for: ")
             .color(NamedTextColor.YELLOW)
             .append(Component.text(entitlementAlias).color(NamedTextColor.WHITE))
             .append(Component.text("...").color(NamedTextColor.YELLOW)));
 
-        apiClient.createGrantTask(player, entitlementAlias).thenAccept(result -> {
+        // Choose the appropriate method based on sign type
+        java.util.concurrent.CompletableFuture<com.logansaso.signaccessrequest.client.C1ApiClient.AccessRequestResult> taskFuture =
+            signType == SignValidator.SignType.GRANT ?
+                apiClient.createGrantTask(player, entitlementAlias) :
+                apiClient.createRevokeTask(player, entitlementAlias);
+
+        taskFuture.thenAccept(result -> {
             // Schedule back to main thread for sending message
             plugin.getServer().getScheduler().runTask(plugin, () -> {
                 if (result.isSuccess()) {
-                    player.sendMessage(Component.text("✓ Access request submitted successfully!")
+                    player.sendMessage(Component.text("✓ " + actionText.substring(0, 1).toUpperCase() + actionText.substring(1) + " request submitted successfully!")
                         .color(NamedTextColor.GREEN));
 
                     // Show task URL if available (clickable)
@@ -98,8 +108,23 @@ public class SignInteractListener implements Listener {
                                 .hoverEvent(net.kyori.adventure.text.event.HoverEvent.showText(
                                     Component.text("Click to open in browser").color(NamedTextColor.YELLOW)))));
                     }
+                } else if (result.hasExistingTasks()) {
+                    // Show existing tasks
+                    player.sendMessage(Component.text("ℹ " + result.getMessage())
+                        .color(NamedTextColor.YELLOW));
+
+                    // Show clickable links for each existing task
+                    for (com.logansaso.signaccessrequest.client.C1ApiClient.ExistingTask task : result.getExistingTasks()) {
+                        player.sendMessage(Component.text("   • ")
+                            .color(NamedTextColor.GRAY)
+                            .append(Component.text(task.getTaskUrl())
+                                .color(NamedTextColor.AQUA)
+                                .clickEvent(net.kyori.adventure.text.event.ClickEvent.openUrl(task.getTaskUrl()))
+                                .hoverEvent(net.kyori.adventure.text.event.HoverEvent.showText(
+                                    Component.text(task.getDisplayName() + " - Click to open").color(NamedTextColor.YELLOW)))));
+                    }
                 } else {
-                    player.sendMessage(Component.text("✗ Failed to submit access request")
+                    player.sendMessage(Component.text("✗ Failed to submit " + actionText + " request")
                         .color(NamedTextColor.RED));
                     player.sendMessage(Component.text("   " + result.getMessage())
                         .color(NamedTextColor.GRAY));
